@@ -229,6 +229,12 @@ button:focus-visible { outline: 3px solid var(--paper); outline-offset: 5px; }
 .overlay .btn.px:active { transform: scale(.985); }
 .overlay .devrow .small { width: auto; }
 #promoBox input { border-radius: 12px !important; border: 0 !important; background: rgba(255, 255, 255, .12) !important; }
+#trBox[hidden] { display: none !important; }
+#trBox { margin: 6px 0 10px; }
+#trBox .trNote { margin: 0 0 8px; font-size: 13px; line-height: 1.4; color: var(--muted); text-align: center; }
+#trCode { display: block; width: 100%; box-sizing: border-box; min-height: 74px; resize: none; font: 12px/1.3 monospace; padding: 10px 12px; margin: 0 0 8px; color: #eef5d8; background: rgba(255, 255, 255, .12); border: 0; border-radius: 12px; }
+#trBox .trRow { display: flex; gap: 6px; }
+.overlay #trBox .trRow .small { margin: 0; flex: 1 1 0; }
 #vol { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .28); outline: none; margin: 14px 0; }
 #vol::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%; background: #ffffff; box-shadow: 0 2px 6px rgba(0, 0, 0, .45); }
 #vol::-moz-range-thumb { width: 26px; height: 26px; border: 0; border-radius: 50%; background: #ffffff; box-shadow: 0 2px 6px rgba(0, 0, 0, .45); }
@@ -482,6 +488,13 @@ button:focus-visible { outline: 3px solid var(--paper); outline-offset: 5px; }
       <button id="openAlbum" class="small" type="button">Альбом и награды</button>
       <button id="openPromo" class="small" type="button">Промокод</button>
       <div id="promoBox" hidden style="display:flex;gap:6px;margin:6px 0"><input id="promoIn" type="text" autocomplete="off" autocapitalize="characters" placeholder="Введи промокод"><button id="promoGo" class="small" type="button">Ок</button></div>
+      <button id="openTransfer" class="small" type="button">Перенос прогресса</button>
+      <div id="trBox" hidden>
+        <p class="trNote">Нажми «Получить код», скопируй его и вставь на другом телефоне или в другом браузере: прогресс переедет.</p>
+        <button id="trGet" class="small" type="button">Получить код</button>
+        <textarea id="trCode" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" placeholder="Здесь появится код. Или вставь сюда свой код."></textarea>
+        <div class="trRow"><button id="trCopy" class="small" type="button">Скопировать</button><button id="trLoad" class="small" type="button">Загрузить код</button></div>
+      </div>
       <button id="openCredits" class="small" type="button" hidden>Об игре</button>
       <button id="reset" class="small" type="button">Начать заново</button>
       <button id="closeSet" class="btn px" type="button">Готово</button>
@@ -1626,6 +1639,12 @@ const SFX = (() => {
 
 let S = 3, S_DEF = 3, VW = 0, VH = 0, WW = 0, WH = 0, N = 13;
 const WORLD_KX = 2.0, WORLD_KY = 1.38; /* the meadow is bigger than the screen even at the widest zoom */
+/* Starting meadow: always sized as if the screen were held upright, so it does not matter how the phone lay on the first launch. */
+function startDims(cw, ch) {
+  const sw = Math.min(cw, ch), lg = Math.max(cw, ch);
+  const sd = clamp(Math.round(Math.min(sw, lg * 0.8) / 130), 3, 6);
+  return { sd, W: Math.ceil(Math.ceil(sw / sd) * WORLD_KX), H: Math.ceil(Math.ceil(lg / sd) * WORLD_KY) };
+}
 const cam = { x: 0, y: 0 };
 let drag = null;
 let ground = null, groundPrev = null, groundFade = 0, groundFadeMax = 2;
@@ -2189,21 +2208,30 @@ function resize() {
   const cw = stage.clientWidth, ch = stage.clientHeight;
   if (!cw || !ch) return;
   if (WW === 0) {
-    S_DEF = clamp(Math.round(Math.min(cw, ch * 0.8) / 130), 3, 6);
-    S = S_DEF;
-    WW = Math.ceil(Math.ceil(cw / S) * WORLD_KX); WH = Math.ceil(Math.ceil(ch / S) * WORLD_KY);
+    { const sd = startDims(cw, ch); S_DEF = sd.sd; S = S_DEF; WW = sd.W; WH = sd.H; }
     if (savedWorld) {
-      let W0 = savedWorld[0], H0 = savedWorld[1]; const nW = Math.max(W0, WW);
+      let W0 = savedWorld[0], H0 = savedWorld[1]; let nW = Math.max(W0, WW);
       let nH = Math.max(H0, WH);
+      const ax0 = inv.house.ax != null ? inv.house.ax : Math.floor(W0 / 2 / CELL) * CELL;
+      const ay0 = inv.house.ay != null ? inv.house.ay : Math.floor(H0 * 0.6 / CELL) * CELL;
       if (H0 > WH) {
         /* shorten the meadow only if nothing of yours stands in the part that is cut off */
-        let maxY = 40; const ay0 = inv.house.ay != null ? inv.house.ay : Math.floor(H0 * 0.6 / CELL) * CELL;
+        let maxY = 40;
         for (const k in inv.house.cells) maxY = Math.max(maxY, ay0 + (+k.split(',')[1] + 1) * CELL + 6);
         inv.stl.forEach(e => { if (e.fy != null) maxY = Math.max(maxY, e.fy * H0 + 4); });
         if (savedShop) maxY = Math.max(maxY, savedShop[1] * H0 + 6); if (savedTree) maxY = Math.max(maxY, savedTree[1] * H0 + 6);
         if (maxY < WH - 6) nH = WH;
       }
-      if (nW > W0 || nH !== H0) {
+      /* everybody has the same land: starting width plus the plots bought. A wider saved meadow (first launched with the phone on its side) is trimmed back, but only if nothing of yours stands in the cut-off part */
+      const goalW = WW + (inv.land || 0) * CELL;
+      if (W0 > goalW) {
+        let maxX = 40;
+        for (const k in inv.house.cells) maxX = Math.max(maxX, ax0 + (+k.split(',')[0] + 1) * CELL + 6);
+        inv.stl.forEach(e => { if (e.fx != null) maxX = Math.max(maxX, e.fx * W0 + 4); });
+        if (savedShop) maxX = Math.max(maxX, savedShop[0] * W0 + 6); if (savedTree) maxX = Math.max(maxX, savedTree[0] * W0 + 6);
+        if (maxX < goalW - 6) nW = goalW;
+      }
+      if (nW !== W0 || nH !== H0) {
         if (inv.house.ax == null) inv.house.ax = Math.floor(W0 / 2 / CELL) * CELL;
         if (inv.house.ay == null) inv.house.ay = Math.floor(H0 * 0.6 / CELL) * CELL;
         inv.stl.forEach(e => { if (e.fx != null) { e.fx *= W0 / nW; e.fy *= H0 / nH; } });
@@ -2212,11 +2240,12 @@ function resize() {
       }
       WW = nW; WH = nH;
     }
+    S = clamp(S, minS(), maxS());
     makeGround();
     layoutView();
     N = clamp(Math.round(WW * WH / 4200 * (tier === 8 ? 1.15 : 1)), 8, 58);
     girl.x = WW / 2; girl.y = WH * 0.55;
-    cam.x = (WW - VW) / 2; cam.y = (WH - VH) / 2;
+    cam.x = Math.max(0, (WW - VW) / 2); cam.y = Math.max(0, (WH - VH) / 2);
     while (regularCount() < N) addRegular(true);
     initButterflies(); initFlies();
     return;
@@ -4788,8 +4817,9 @@ stage.addEventListener('gesturestart', e => e.preventDefault());
 
 /* ------------------------------------------------------------ settings and saving */
 const SAVE_KEY = 'flowerMeadow.v5';
-const GAME_VER = '1.6.2'; /* v51 = 1.5.1, v52 = 1.6.0 (музыка из файлов, плеер), v53 = 1.6.1 (пароль в виде хэша), v54 = 1.6.2 (сброс возвращает размер поляны, камера 0,4 с); при каждом выпуске поднимать и пересчитывать разовый пароль: tools/devhash.py */
+const GAME_VER = '1.6.3'; /* v51 = 1.5.1, v52 = 1.6.0 (музыка из файлов, плеер), v53 = 1.6.1 (пароль в виде хэша), v54 = 1.6.2 (сброс возвращает размер поляны, камера 0,4 с), v55 = 1.6.3 (одинаковая поляна у всех, не зависит от положения телефона; код переноса прогресса); при каждом выпуске поднимать и пересчитывать разовый пароль: tools/devhash.py */
 let savedWorld = null, savedShop = null;
+let xferLock = false; /* set while a transfer code is being loaded, so the old progress does not overwrite it */
 let uni = null;
 /* music: 1/0 on-off, mTrack: current track id, mAuto: 1 = switches by itself, mMode: seq | rand | fav, mFav: favourite ids, mv: format (2 = this one) */
 const opt = { sound: 1, vol: 90, music: 1, tod: 'auto', mTrack: 'meadow', mAuto: 1, mMode: 'seq', mFav: [], mv: 2 };
@@ -4936,6 +4966,7 @@ $('closeMusic').addEventListener('click', closePick);
 musicPickEl.addEventListener('click', e => { if (e.target === musicPickEl) closePick(); });
 
 function saveGame() {
+  if (xferLock) return;
   try { localStorage.setItem(SAVE_KEY, JSON.stringify({ score, coins, opt, inv, album, ach, stats, fx: fxSnapshot(), world: WW ? [WW, WH] : null, tree: tree.x && WW ? [+(tree.x / WW).toFixed(4), +(tree.y / WH).toFixed(4)] : null, shop: shop.x && WW ? [+(shop.x / WW).toFixed(4), +(shop.y / WH).toFixed(4)] : null })); } catch (e) { /* storage may be blocked */ }
 }
 function loadGame() {
@@ -5004,6 +5035,7 @@ const HELP = [
   [() => true, 'Звери', 'Иногда приходят звери. Нажми на зверя, чтобы погладить.'],
   [() => true, 'Настройки', 'Здесь звук, музыка, время суток, смена героини за 100 цветков, альбом и промокод.'],
   [() => true, 'Музыка', 'В настройках стрелки меняют музыку. «Авто» меняет её сама: по очереди, случайно или только любимую. Кнопка «Выбор музыки» открывает весь список: нажми на музыку, и она будет играть, пока сам не выберешь другую. Сердечко добавляет в любимые. Новая музыка при первом включении загружается из интернета.'],
+  [() => true, 'Перенос прогресса', 'В настройках нажми «Перенос прогресса» и «Получить код». Скопируй код и на другом телефоне или в другом браузере вставь его и нажми «Загрузить код»: прогресс переедет. Прогресс хранится в том браузере, где ты играешь, поэтому в Safari, в Instagram и в иконке на экране он у каждого свой.'],
   [() => !buildBtn.hidden, 'Стройка', 'Молоток: ставь полы, стены, двери, окна, мебель. Нажми на вещь, она замигает, потяни или нажми на новое место. Двери склеиваются по две, окна по три. Когда девочка в доме, передние стены становятся прозрачными.'],
   [() => !buildBtn.hidden, 'Дерево', 'В молотке есть кнопка «Дерево»: можно переставить его на другое место, например на задний двор. Каждая пересадка стоит 200 цветков.'],
   [() => ach.farm || inv.bld.k_garden || Object.values(inv.house.cells).some(c => c.d === 'k_garden'), 'Огород', 'Семена сажают на грядку. Урожай растёт сам, нажми на него, когда созреет. Продать можно в лавке.'],
@@ -5105,7 +5137,7 @@ function hardReset() {
   groundSeed = 7 + ((Math.random() * 1000) | 0);
   { /* the meadow goes back to its starting size: bought land lines are gone together with inv.land */
     const cw = stage.clientWidth, ch = stage.clientHeight;
-    if (cw && ch && S_DEF) { WW = Math.ceil(Math.ceil(cw / S_DEF) * WORLD_KX); WH = Math.ceil(Math.ceil(ch / S_DEF) * WORLD_KY); }
+    if (cw && ch) { const sd = startDims(cw, ch); S_DEF = sd.sd; WW = sd.W; WH = sd.H; }
     savedWorld = null; S = S_DEF || S; layoutView(); S = clamp(S, minS(), maxS()); layoutView();
     N = clamp(Math.round(WW * WH / 4200), 8, 58);
   }
@@ -5200,7 +5232,7 @@ function devHash(pw) {
   return Array.from(h, x => x.toString(16).padStart(2, '0')).join('');
 }
 const DEV_MASTER = '29c99c1bc937165b6dbc660f1362d597d02bec87934247f3f54f6e8cfb703621';
-const DEV_ONCE = '637f31b261a606a297653ea502a120345a4678227827c63d32d2e31efd238ae9';
+const DEV_ONCE = 'f0132223c126afc98b76b606a0dc68067fcea4e59c7c7f77653ef4fdb470be6f';
 const DEV_SEC = 300, DT_KEY = 'flowerMeadow.dt', DO_KEY = 'flowerMeadow.do';
 let devUntil = 0, onceMem = false;
 try { devUntil = Number(localStorage.getItem(DT_KEY)) || 0; } catch (e) { /* no storage */ }
@@ -5554,6 +5586,60 @@ $('openCredits').addEventListener('click', () => { closeSettings(); setTimeout((
 $('openPromo').addEventListener('click', () => { const b = $('promoBox'); b.hidden = !b.hidden; if (!b.hidden) $('promoIn').focus(); });
 $('promoGo').addEventListener('click', () => { const v = $('promoIn').value; $('promoIn').value = ''; redeemPromo(v); });
 $('promoIn').addEventListener('keydown', e => { if (e.key === 'Enter') $('promoGo').click(); });
+
+/* ---- progress transfer code: one string with the whole save, signed so that a typo is noticed ---- */
+const XSALT = 'poliana-xfer-v1';
+const b64u = u8 => { let t = ''; for (let i = 0; i < u8.length; i += 0x8000) t += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(t).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+const unb64u = t => { const r = atob(t.replace(/-/g, '+').replace(/_/g, '/')); const u = new Uint8Array(r.length); for (let i = 0; i < r.length; i++) u[i] = r.charCodeAt(i); return u; };
+const xsig = t => Array.from(sha256b(new TextEncoder().encode(XSALT + t)).subarray(0, 5), x => x.toString(16).padStart(2, '0')).join('');
+async function pipeBytes(u8, tf) { return new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(tf)).arrayBuffer()); }
+async function makeCode() {
+  saveGame();
+  const raw = localStorage.getItem(SAVE_KEY); if (!raw) throw new Error('empty');
+  let c = '0'; try { c = localStorage.getItem('flowerMeadow.chp') === '1' ? '1' : '0'; } catch (e) { /* no storage */ }
+  const bytes = new TextEncoder().encode(JSON.stringify({ v: 1, s: raw, c }));
+  let tag = '0', body = bytes;
+  if (window.CompressionStream) { try { body = await pipeBytes(bytes, new CompressionStream('gzip')); tag = '1'; } catch (e) { body = bytes; tag = '0'; } }
+  const t = tag + b64u(body);
+  return 'POL-' + t + '-' + xsig(t);
+}
+async function readCode(code) {
+  if (code.length > 400000) throw new Error('bad');
+  const m = /^POL-([01][A-Za-z0-9_-]+)-([0-9a-f]{10})$/.exec(code.replace(/\s+/g, ''));
+  if (!m || xsig(m[1]) !== m[2]) throw new Error('bad');
+  let body = unb64u(m[1].slice(1));
+  if (m[1][0] === '1') { if (!window.DecompressionStream) throw new Error('nodec'); body = await pipeBytes(body, new DecompressionStream('gzip')); }
+  const j = JSON.parse(new TextDecoder().decode(body)), sv = JSON.parse(j.s);
+  if (!sv || typeof sv.score !== 'number' || !isFinite(sv.score) || typeof sv.coins !== 'number' || !sv.inv || typeof sv.inv !== 'object' || !sv.opt || typeof sv.opt !== 'object') throw new Error('bad');
+  return { raw: j.s, c: j.c === '1' };
+}
+let trPending = null, trTimer = 0;
+function trReset() { trPending = null; clearTimeout(trTimer); $('trLoad').textContent = 'Загрузить код'; }
+$('openTransfer').addEventListener('click', () => { const b = $('trBox'); b.hidden = !b.hidden; trReset(); });
+$('trGet').addEventListener('click', () => {
+  makeCode().then(c => { $('trCode').value = c; $('trCode').focus(); $('trCode').select(); toast('Код готов. Нажми «Скопировать».'); })
+    .catch(() => toast('Не получилось сделать код.'));
+});
+$('trCopy').addEventListener('click', () => {
+  const ta = $('trCode'), v = ta.value.trim();
+  if (!v) { toast('Сначала получи код.'); return; }
+  const fb = () => { ta.focus(); ta.select(); try { ta.setSelectionRange(0, v.length); document.execCommand('copy'); toast('Код скопирован.'); } catch (e) { toast('Выдели код и скопируй вручную.'); } };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(() => toast('Код скопирован.')).catch(fb); else fb();
+});
+$('trLoad').addEventListener('click', () => {
+  if (trPending) {
+    const p = trPending; trReset(); xferLock = true;
+    try { localStorage.setItem(SAVE_KEY, p.raw); if (p.c) localStorage.setItem('flowerMeadow.chp', '1'); } catch (e) { xferLock = false; toast('Не удалось сохранить прогресс.'); return; }
+    toast('Прогресс загружен. Игра перезапустится.'); setTimeout(() => location.reload(), 700); return;
+  }
+  const v = $('trCode').value.trim();
+  if (!v) { toast('Вставь код в поле.'); return; }
+  readCode(v).then(p => {
+    trPending = p; $('trLoad').textContent = 'Заменить прогресс?';
+    toast('Нынешний прогресс на этом устройстве будет заменён. Нажми ещё раз.');
+    trTimer = setTimeout(trReset, 7000);
+  }).catch(e => toast(e && e.message === 'nodec' ? 'Этот браузер не может прочитать код. Обнови его.' : 'Код не подошёл. Проверь, что он скопирован целиком.'));
+});
 /* ------------------------------------------------------------ shop, album, camera */
 const shopSprite = makeSmall(["...HHHH.....", "..HHHHHH..Y.", ".HHHHHHHH.T.", "HHHHHHHHHHT.", "..SSSSSS..T.", "..SESSES..T.", "..SSSSSS..T.", "..WWWWWW..T.", ".WWWWWWWW.T.", "..WWWWWW..T.", "..BBBBBB..T.", ".BBBbBBBBST.", ".BBBBBBBB.T.", ".BBBBBBBB.T.", ".BBBBBBBB.T.", ".BBBBBBBB.T.", "..DD..DD..T.", "..DD..DD..T."], { H: '#7a4a2a', S: '#f0c9a0', E: '#2a1a12', W: '#f4f4f0', B: '#3f6fb0', b: '#7aa6e0', Y: '#ffd23f', T: '#8a6a3a', D: '#3a2a1c' }, 12, 18);
 const iconCache = {};

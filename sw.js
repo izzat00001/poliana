@@ -1,5 +1,5 @@
 /* Цветочная поляна: офлайн-режим. Версия кэша = версия игры. */
-const CACHE = 'poliana-1.6.2';
+const CACHE = 'poliana-1.6.3';
 /* музыка лежит в отдельной памяти: при обновлении игры 9 МБ заново не скачиваются (меняйте номер, только если файлы музыки заменили) */
 const MUSIC = 'poliana-music-1';
 const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
